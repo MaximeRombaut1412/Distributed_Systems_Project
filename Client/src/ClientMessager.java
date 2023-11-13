@@ -9,13 +9,16 @@ import java.util.List;
 
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.Random;
 
 public class ClientMessager {
 
     String serverAddress;
     int serverPort;
     private MessageHandler messageHandler;
-    //private ClientCallback stub;
+    private Random random;
+    private int startTag;
+    private int startIndex;
 
     JFrame frame = new JFrame("Client Messager");
     JTextField inputBox = new JTextField(50);
@@ -26,6 +29,9 @@ public class ClientMessager {
     JButton receiveButton = new JButton("RECEIVE");
 
     public ClientMessager(String serverAddress, int port) {
+        random = new Random();
+        startTag = 0;
+        startIndex = 1;
 
         this.serverAddress = serverAddress;
         this.serverPort = port;
@@ -65,7 +71,7 @@ public class ClientMessager {
             // send message directly when pressing enter (instead of using button)
             inputBox.addActionListener(e -> {
                 try {
-                    messageHandler.add(2, new ValueTagPair("Dit is een message", 0).getMessage()); //TODO index moet random zijn
+                    messageHandler.add(2, new ValueTagPair("Dit is een message ||" + random.nextInt() + "||" + random.nextInt(), 0).getMessage()); //TODO index moet random zijn
 
                 } catch (RemoteException remoteException) {
                     remoteException.printStackTrace();
@@ -90,49 +96,12 @@ public class ClientMessager {
         }
 
     }
+    public void constructMessage(String message){
+        int randomInt = random.nextInt();
 
+    }
 
     private void run() throws IOException {
-
-        /*
-        try {
-
-            var socket = new Socket(serverAddress, serverPort);
-
-            in = new Scanner(socket.getInputStream());
-            out = new PrintWriter(socket.getOutputStream(), true);
-            Thread receiveThread = new ReceiveThread(socket, in, out, inputBox, allMessages, frame, userNameList);
-            receiveThread.start();
-
-        }
-        catch (IOException e) {
-            e.printStackTrace();
-        }
-        finally {
-
-                //frame.setVisible(false);
-                //frame.dispose();
-            }
-        */
-
-//        try {
-//            while (true) {
-//                //added extra checks for username
-//                if (userName != null && !userName.trim().isEmpty()) {
-//
-//                    if(server.submitName(userName, stub)){
-//                        inputBox.setEditable(true);
-//                        break;
-//                    }
-//                    else {
-//                        JOptionPane.showMessageDialog(frame, "Username already in use. Please choose another one.");
-//                    }
-//                }
-//            }
-//        }
-//        catch (RemoteException e) {
-//            e.printStackTrace();
-//        }
 
     }
 
