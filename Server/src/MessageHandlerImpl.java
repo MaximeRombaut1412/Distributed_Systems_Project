@@ -1,3 +1,4 @@
+import javax.crypto.SecretKey;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 
@@ -8,15 +9,26 @@ public class MessageHandlerImpl extends UnicastRemoteObject implements MessageHa
    };
 
     @Override
-    public void add(int i, String valueTagPair) throws RemoteException {
-        String[] split = valueTagPair.split("||");
-        bulletinBoard.setValueTagPairOnIndex(valueTagPair,i);
+    public void add(int index, String message, String tag) throws RemoteException {
+        //String[] split = valueTagPair.split("||");
+        bulletinBoard.addMessage(message,index,tag);
     }
 
     @Override
-    public String get(int index, int b) throws RemoteException {
-        return bulletinBoard.removeValueTagPairOnIndex(index,b);
+    public String get(int index, String tag) throws RemoteException {
+        return bulletinBoard.getMessage(index,tag);
     }
+
+    @Override
+    public void sendKey(SecretKey masterkey) throws RemoteException {
+        bulletinBoard.setKey(masterkey);
+    }
+
+    @Override
+    public SecretKey getKey() throws RemoteException {
+        return bulletinBoard.getKey();
+    }
+
 
 }
 
