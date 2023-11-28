@@ -1,34 +1,31 @@
-import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
+import javax.crypto.*;
+import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.spec.SecretKeySpec;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.KeySpec;
 import java.util.*;
 
 import java.rmi.RemoteException;
-import java.rmi.server.UnicastRemoteObject;
-import java.util.List;
 
 public class ClientMessager {
-
     String serverAddress;
     int serverPort;
     private MessageHandler messageHandler;
     private Random random;
-    private int startTag;
-    private int startIndex;
     private HashMap<String,Integer> indexPerContact;
     private HashMap<String, String> tagPerContact;
     private HashMap<String,SecretKey> keyPerContact;
+    private HashMap<String,SecretKey> derivedKeyPerContact;
     private MessageDigest messageDigest;
 
     JFrame frame = new JFrame("Client Messager");
@@ -48,6 +45,7 @@ public class ClientMessager {
         tagPerContact.put("Test1", "4");
         indexPerContact.put("Test1", 2);
         keyPerContact = new HashMap<>();
+        derivedKeyPerContact = new HashMap<>();
         try {
             messageDigest = MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
@@ -72,18 +70,16 @@ public class ClientMessager {
             inputPanel.add(sendKeyButton);
             inputPanel.add(receiveKeyButton);
 
-
             JPanel messagesPanel = new JPanel(new BorderLayout());
             messagesPanel.add(messageBoxLabel, BorderLayout.WEST);
             messagesPanel.add(new JScrollPane(allMessages), BorderLayout.CENTER);
-
-            //userNameList.setListData(new String[]{"Randal", "Maxime"});
 
             frame.getContentPane().add(inputPanel, BorderLayout.NORTH);
             frame.getContentPane().add(messagesPanel, BorderLayout.CENTER);
             frame.pack();
 
             sendButton.addActionListener(e -> {
+                receiveHandler(true, "Test1");
                 sendMessage(inputBox.getText(), "Test1");
                 inputBox.setText("");
             });
@@ -93,18 +89,17 @@ public class ClientMessager {
                     SwingUtilities.invokeLater(() -> {
                         allMessages.append("Key send" + "\n");
                     });
-
                 } catch (RemoteException ex) {
                     throw new RuntimeException(ex);
                 } catch (Exception ex) {
                     throw new RuntimeException(ex);
                 }
             });
-
             receiveKeyButton.addActionListener(e -> {
                 try {
                     SecretKey key = messageHandler.getKey();
                     keyPerContact.put("Test1", key);
+                    derivedKeyPerContact.put("Test1",key);
                     if (key != null){
                         SwingUtilities.invokeLater(() -> {
                             allMessages.append("Key received" + "\n");
@@ -115,50 +110,63 @@ public class ClientMessager {
                             allMessages.append("No key received" + "\n");
                         });
                     }
-
                 } catch (RemoteException ex) {
                     throw new RuntimeException(ex);
                 }
             });
-
-            // send message directly when pressing enter (instead of using button)
             inputBox.addActionListener(e -> {
+                receiveHandler(true, "Test1");
                 sendMessage(inputBox.getText(), "Test1");
                 inputBox.setText("");
             });
-
             receiveButton.addActionListener(e->{
-                try{
-                    String message = messageHandler.get(indexPerContact.get("Test1"), hashTag(tagPerContact.get("Test1")));
-                    if (message != null){
-                        SwingUtilities.invokeLater(() -> {
-                            allMessages.append(readMessage(message, "Test1") + "\n");
-                        });
-                    }
-                    else{
-                        SwingUtilities.invokeLater(() -> {
-                            allMessages.append("No new messages" + "\n");
-                        });
-                    }
-
-                } catch (RemoteException ex) {
-                    throw new RuntimeException(ex);
-                }
+                receiveHandler(false, "Test1");
             });
-
         } catch (Exception e) {
             e.printStackTrace();
         }
-
+    }
+    public void receiveHandler(boolean isSend,String contact){
+        try{
+            String message = messageHandler.get(indexPerContact.get(contact), hashTag(tagPerContact.get(contact)));
+            if (message != null){
+                String toDisplayMessage = readMessage(message, contact);
+                SwingUtilities.invokeLater(() -> {
+                    allMessages.append("Not you: " + toDisplayMessage + "\n");
+                });
+                boolean controller = true;
+                while(controller){
+                    controller = checkForMessages(contact);
+                }
+            }
+            else if(!isSend){
+                SwingUtilities.invokeLater(() -> {
+                    allMessages.append("No new messages" + "\n");
+                });
+            }
+        } catch (RemoteException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+    public boolean checkForMessages(String contact) throws RemoteException {
+        String message = messageHandler.get(indexPerContact.get(contact), hashTag(tagPerContact.get(contact)));
+        if (message != null){
+            String toDisplayMessage = readMessage(message, contact);
+            SwingUtilities.invokeLater(() -> {
+                allMessages.append("Not you: " + toDisplayMessage + "\n");
+            });
+            return true;
+        }
+        return false;
     }
     public void sendMessage(String message, String contact){
         String newTag = String.valueOf(random.nextInt());
         int newIndex = random.nextInt(0,4);
         String constructedMessage = message + "||" + newIndex + "||" + newTag;
-        //TODO encrypt constructed message.
         String encryptedMessage = "";
         try {
-            encryptedMessage = encryptMessage(constructedMessage,contact);
+            encryptedMessage = encryptMessage2(constructedMessage,contact);
+            derivedKeyPerContact.put(contact, deriveKey(contact));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -169,28 +177,22 @@ public class ClientMessager {
         }
         indexPerContact.put(contact, newIndex);
         tagPerContact.put(contact, newTag);
+        SwingUtilities.invokeLater(() -> {
+            allMessages.append("You: "+ message + "\n");
+        });
     }
-
-    public String encryptMessage(String message, String contact) throws Exception{
-        SecretKey key = keyPerContact.get(contact);
+    public String encryptMessage2(String message, String contact) throws Exception{
+        SecretKey derivedKey = derivedKeyPerContact.get(contact);
         Cipher c = Cipher.getInstance("AES");
-        c.init(Cipher.ENCRYPT_MODE,key);
+        c.init(Cipher.ENCRYPT_MODE,derivedKey);
         return Base64.getEncoder().encodeToString(c.doFinal(message.getBytes("UTF-8")));
     }
     public String decryptMessage(String encryptedMessage, String contact) throws Exception{
-        SecretKey key = keyPerContact.get(contact);
+        SecretKey key = derivedKeyPerContact.get(contact);
         Cipher c = Cipher.getInstance("AES");
         c.init(Cipher.DECRYPT_MODE,key);
         return new String(c.doFinal(Base64.getDecoder().decode(encryptedMessage)),"UTF-8");
     }
-
-    public void testEncryption() throws Exception{
-        String ogM = "Dit is een message";
-        String msg = encryptMessage(ogM, "Test1");
-        String dm = decryptMessage(msg, "Test1");
-        System.out.println();
-    }
-
     public String readMessage(String encryptedMessage, String contact){
         String decryptedMessage = "";
         try {
@@ -201,6 +203,7 @@ public class ClientMessager {
         String[] split = decryptedMessage.split("\\|\\|");
         indexPerContact.put(contact, Integer.valueOf(split[1]));
         tagPerContact.put(contact,split[2]);
+        derivedKeyPerContact.put(contact,deriveKey(contact));
         return split[0];
     }
     public SecretKey createKey(String contact){
@@ -213,17 +216,28 @@ public class ClientMessager {
         keyGenAES.init(256, new SecureRandom());
         SecretKey masterKey = keyGenAES.generateKey();
         keyPerContact.put(contact,masterKey);
+        derivedKeyPerContact.put(contact,masterKey);
         return masterKey;
-
-
-        //DerivationFunction derivationFunction = new
-
-
     }
     private String hashTag(String tag){
         byte[] bytes = tag.getBytes();
         byte[] hashed = messageDigest.digest(bytes);
         return Base64.getEncoder().encodeToString(hashed);
+    }
+
+    public SecretKey deriveKey(String contact){
+        try {
+            SecretKey masterKey = keyPerContact.get(contact);
+            SecretKey salt = derivedKeyPerContact.get(contact);
+            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            KeySpec spec = new PBEKeySpec(masterKey.toString().toCharArray(), salt.getEncoded(),65536,128);
+            SecretKey tmp = factory.generateSecret(spec);
+            SecretKey secret = new SecretKeySpec(tmp.getEncoded(), "AES");
+            return secret;
+
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+            throw new RuntimeException(e);
+        }
     }
 
 
@@ -235,7 +249,6 @@ public class ClientMessager {
 
         var client = new ClientMessager("localhost", 1099);
 
-        //client.frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         client.frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         client.frame.addWindowListener(new WindowAdapter() {
             @Override

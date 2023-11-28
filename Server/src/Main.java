@@ -6,14 +6,6 @@ import java.sql.SQLOutput;
 public class Main {
     public static void main(String[] args) {
         startServer();
-        //BulletinBoard bulletinBoard = new BulletinBoard(5);
-        //bulletinBoard.setValueTagPairOnIndex(new ValueTagPair("Test", 5), 2);
-        //bulletinBoard.setValueTagPairOnIndex(new ValueTagPair("Test2", 4), 2);
-        //bulletinBoard.setValueTagPairOnIndex(new ValueTagPair("Test3", 5), 1);
-
-
-        //System.out.println();
-
     }
     private static void startServer(){
         try{

@@ -6,11 +6,10 @@ public class MessageHandlerImpl extends UnicastRemoteObject implements MessageHa
     private BulletinBoard bulletinBoard;
     public MessageHandlerImpl(int n) throws RemoteException{
        bulletinBoard = new BulletinBoard(n);
-   };
+   }
 
     @Override
     public void add(int index, String message, String tag) throws RemoteException {
-        //String[] split = valueTagPair.split("||");
         bulletinBoard.addMessage(message,index,tag);
     }
 
@@ -28,7 +27,5 @@ public class MessageHandlerImpl extends UnicastRemoteObject implements MessageHa
     public SecretKey getKey() throws RemoteException {
         return bulletinBoard.getKey();
     }
-
-
 }
 

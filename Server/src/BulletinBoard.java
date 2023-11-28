@@ -4,7 +4,6 @@ import java.util.HashMap;
 import java.util.List;
 
 public class BulletinBoard {
-    //private HashMap<Integer,List<String>> bulletinBoard;
     private List<HashMap<String,String>> bulletinBoard;
     private SecretKey key;
 
