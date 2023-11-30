@@ -27,6 +27,7 @@ public class ClientMessager {
     private HashMap<String,SecretKey> keyPerContact;
     private HashMap<String,SecretKey> derivedKeyPerContact;
     private MessageDigest messageDigest;
+    private int boardSize;
 
     JFrame frame = new JFrame("Client Messager");
     JTextField inputBox = new JTextField(50);
@@ -46,6 +47,7 @@ public class ClientMessager {
         indexPerContact.put("Test1", 2);
         keyPerContact = new HashMap<>();
         derivedKeyPerContact = new HashMap<>();
+        boardSize = 20;
         try {
             messageDigest = MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
@@ -161,7 +163,7 @@ public class ClientMessager {
     }
     public void sendMessage(String message, String contact){
         String newTag = String.valueOf(random.nextInt());
-        int newIndex = random.nextInt(0,4);
+        int newIndex = random.nextInt(0,boardSize - 1);
         String constructedMessage = message + "||" + newIndex + "||" + newTag;
         String encryptedMessage = "";
         try {
@@ -230,7 +232,7 @@ public class ClientMessager {
             SecretKey masterKey = keyPerContact.get(contact);
             SecretKey salt = derivedKeyPerContact.get(contact);
             SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-            KeySpec spec = new PBEKeySpec(masterKey.toString().toCharArray(), salt.getEncoded(),65536,128);
+            KeySpec spec = new PBEKeySpec(masterKey.toString().toCharArray(), salt.getEncoded(),65536,256);
             SecretKey tmp = factory.generateSecret(spec);
             SecretKey secret = new SecretKeySpec(tmp.getEncoded(), "AES");
             return secret;
