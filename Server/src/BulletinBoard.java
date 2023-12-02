@@ -5,10 +5,10 @@ import java.util.List;
 
 public class BulletinBoard {
     private List<HashMap<String,String>> bulletinBoard;
-    private SecretKey key;
+    private Bump bump;
 
     public BulletinBoard(int n) {
-        this.key = null;
+        this.bump = null;
         bulletinBoard = new ArrayList<>();
         for (int i = 0; i < n;i++){
             bulletinBoard.add(new HashMap<>());
@@ -21,11 +21,11 @@ public class BulletinBoard {
         String test = bulletinBoard.get(index).remove(tag);
         return test;
     }
-    public void setKey(SecretKey key){
-        this.key = key;
+    public void setBumb(Bump bump){
+        this.bump = bump;
     }
-    public SecretKey getKey(){
-        return this.key;
+    public Bump getBump(){
+        return this.bump;
     }
 
 

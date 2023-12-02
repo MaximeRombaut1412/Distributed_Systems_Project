@@ -19,13 +19,13 @@ public class MessageHandlerImpl extends UnicastRemoteObject implements MessageHa
     }
 
     @Override
-    public void sendKey(SecretKey masterkey) throws RemoteException {
-        bulletinBoard.setKey(masterkey);
+    public void sendBump(Bump bump) throws RemoteException {
+        bulletinBoard.setBumb(bump);
     }
 
     @Override
-    public SecretKey getKey() throws RemoteException {
-        return bulletinBoard.getKey();
+    public Bump getBump() throws RemoteException {
+        return bulletinBoard.getBump();
     }
 }
 

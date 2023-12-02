@@ -22,10 +22,12 @@ public class ClientMessager {
     int serverPort;
     private MessageHandler messageHandler;
     private Random random;
-    private HashMap<String,Integer> indexPerContact;
-    private HashMap<String, String> tagPerContact;
-    private HashMap<String,SecretKey> keyPerContact;
-    private HashMap<String,SecretKey> derivedKeyPerContact;
+    private HashMap<String,Integer> indexPerContactSend;
+    private HashMap<String,Integer> indexPerContactReceive;
+    private HashMap<String, String> tagPerContactSend;
+    private HashMap<String, String> tagPerContactReceive;
+    private HashMap<String,SecretKey[]> keyPerContact;
+    private HashMap<String,SecretKey[]> derivedKeyPerContact;
     private MessageDigest messageDigest;
     private int boardSize;
 
@@ -36,18 +38,21 @@ public class ClientMessager {
     JLabel messageBoxLabel = new JLabel("MESSAGES: ");
     JButton sendButton = new JButton("SEND"); // Added send button
     JButton receiveButton = new JButton("RECEIVE");
-    JButton sendKeyButton = new JButton("SEND KEY");
-    JButton receiveKeyButton = new JButton("RECEIVE KEY");
+    JButton sendKeyButton = new JButton("SEND BUMP");
+    JButton receiveKeyButton = new JButton("RECEIVE BUMP");
 
     public ClientMessager(String serverAddress, int port) {
         random = new Random();
-        tagPerContact = new HashMap<>();
-        indexPerContact = new HashMap<>();
-        tagPerContact.put("Test1", "4");
-        indexPerContact.put("Test1", 2);
+        tagPerContactSend = new HashMap<>();
+        indexPerContactSend = new HashMap<>();
+        tagPerContactReceive = new HashMap<>();
+        indexPerContactReceive = new HashMap<>();
+        //tagPerContactSend.put("Test1", "4");
+        //indexPerContactSend.put("Test1", 2);
         keyPerContact = new HashMap<>();
         derivedKeyPerContact = new HashMap<>();
         boardSize = 20;
+        //createKey("Test1");
         try {
             messageDigest = MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
@@ -81,15 +86,23 @@ public class ClientMessager {
             frame.pack();
 
             sendButton.addActionListener(e -> {
-                receiveHandler(true, "Test1");
+                //receiveHandler(true, "Test1");
                 sendMessage(inputBox.getText(), "Test1");
                 inputBox.setText("");
             });
             sendKeyButton.addActionListener(e -> {
                 try {
-                    messageHandler.sendKey(createKey("Test1"));
+                    createKey("Test1");
+                    String contact = "Test1";
+//                    System.out.println("SEND");
+//                    System.out.println("Tag: " + tagPerContactSend.get(contact));
+//                    System.out.println("Index: " + indexPerContactSend.get(contact));
+//                    System.out.println("Key: " + keyPerContact.get(contact)[0]);
+
+                    Bump bump = new Bump(tagPerContactSend.get(contact), indexPerContactSend.get(contact), keyPerContact.get(contact)[0]);
+                    messageHandler.sendBump(bump);
                     SwingUtilities.invokeLater(() -> {
-                        allMessages.append("Key send" + "\n");
+                        allMessages.append("Bump send" + "\n");
                     });
                 } catch (RemoteException ex) {
                     throw new RuntimeException(ex);
@@ -99,17 +112,37 @@ public class ClientMessager {
             });
             receiveKeyButton.addActionListener(e -> {
                 try {
-                    SecretKey key = messageHandler.getKey();
-                    keyPerContact.put("Test1", key);
-                    derivedKeyPerContact.put("Test1",key);
-                    if (key != null){
+                    String contact = "Test1";
+                    Bump bump = messageHandler.getBump();
+//                    System.out.println("RECEIVE");
+//                    System.out.println("Tag: " + bump.getTag());
+//                    System.out.println("Index: " + bump.getIndex());
+//                    System.out.println("Key: " + bump.getMasterkey());
+                    if (keyPerContact.containsKey(contact)){
+                        SecretKey[] keys = keyPerContact.get("Test1");
+                        keys[1] = bump.getMasterkey();
+                        keyPerContact.put("Test1", keys);
+                        derivedKeyPerContact.put("Test1",keys);
+
+                    }
+                    else{
+                        SecretKey[] keys = new SecretKey[2];
+                        keys[1] = bump.getMasterkey();
+                        keyPerContact.put("Test1", keys);
+                        derivedKeyPerContact.put("Test1",keys);
+                    }
+                    indexPerContactReceive.put(contact,bump.getIndex());
+                    tagPerContactReceive.put(contact, bump.getTag());
+                    //keyPerContact.put("Test1", key);
+                    //derivedKeyPerContact.put("Test1",key);
+                    if (bump != null){
                         SwingUtilities.invokeLater(() -> {
-                            allMessages.append("Key received" + "\n");
+                            allMessages.append("Bump received" + "\n");
                         });
                     }
                     else{
                         SwingUtilities.invokeLater(() -> {
-                            allMessages.append("No key received" + "\n");
+                            allMessages.append("No bump received" + "\n");
                         });
                     }
                 } catch (RemoteException ex) {
@@ -117,7 +150,7 @@ public class ClientMessager {
                 }
             });
             inputBox.addActionListener(e -> {
-                receiveHandler(true, "Test1");
+                //receiveHandler(true, "Test1");
                 sendMessage(inputBox.getText(), "Test1");
                 inputBox.setText("");
             });
@@ -130,7 +163,7 @@ public class ClientMessager {
     }
     public void receiveHandler(boolean isSend,String contact){
         try{
-            String message = messageHandler.get(indexPerContact.get(contact), hashTag(tagPerContact.get(contact)));
+            String message = messageHandler.get(indexPerContactReceive.get(contact), hashTag(tagPerContactReceive.get(contact)));
             if (message != null){
                 String toDisplayMessage = readMessage(message, contact);
                 SwingUtilities.invokeLater(() -> {
@@ -151,7 +184,7 @@ public class ClientMessager {
         }
     }
     public boolean checkForMessages(String contact) throws RemoteException {
-        String message = messageHandler.get(indexPerContact.get(contact), hashTag(tagPerContact.get(contact)));
+        String message = messageHandler.get(indexPerContactReceive.get(contact), hashTag(tagPerContactReceive.get(contact)));
         if (message != null){
             String toDisplayMessage = readMessage(message, contact);
             SwingUtilities.invokeLater(() -> {
@@ -168,29 +201,31 @@ public class ClientMessager {
         String encryptedMessage = "";
         try {
             encryptedMessage = encryptMessage2(constructedMessage,contact);
-            derivedKeyPerContact.put(contact, deriveKey(contact));
+            SecretKey[] keys = derivedKeyPerContact.get(contact);
+            keys[0] = deriveKey(contact,true);
+            derivedKeyPerContact.put(contact, keys);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
         try {
-            messageHandler.add(indexPerContact.get(contact), encryptedMessage, hashTag(tagPerContact.get(contact)));
+            messageHandler.add(indexPerContactSend.get(contact), encryptedMessage, hashTag(tagPerContactSend.get(contact)));
         } catch (RemoteException e) {
             throw new RuntimeException(e);
         }
-        indexPerContact.put(contact, newIndex);
-        tagPerContact.put(contact, newTag);
+        indexPerContactSend.put(contact, newIndex);
+        tagPerContactSend.put(contact, newTag);
         SwingUtilities.invokeLater(() -> {
             allMessages.append("You: "+ message + "\n");
         });
     }
     public String encryptMessage2(String message, String contact) throws Exception{
-        SecretKey derivedKey = derivedKeyPerContact.get(contact);
+        SecretKey derivedKey = derivedKeyPerContact.get(contact)[0];
         Cipher c = Cipher.getInstance("AES");
         c.init(Cipher.ENCRYPT_MODE,derivedKey);
         return Base64.getEncoder().encodeToString(c.doFinal(message.getBytes("UTF-8")));
     }
     public String decryptMessage(String encryptedMessage, String contact) throws Exception{
-        SecretKey key = derivedKeyPerContact.get(contact);
+        SecretKey key = derivedKeyPerContact.get(contact)[1];
         Cipher c = Cipher.getInstance("AES");
         c.init(Cipher.DECRYPT_MODE,key);
         return new String(c.doFinal(Base64.getDecoder().decode(encryptedMessage)),"UTF-8");
@@ -203,12 +238,14 @@ public class ClientMessager {
             throw new RuntimeException(e);
         }
         String[] split = decryptedMessage.split("\\|\\|");
-        indexPerContact.put(contact, Integer.valueOf(split[1]));
-        tagPerContact.put(contact,split[2]);
-        derivedKeyPerContact.put(contact,deriveKey(contact));
+        indexPerContactReceive.put(contact, Integer.valueOf(split[1]));
+        tagPerContactReceive.put(contact,split[2]);
+        SecretKey[] keys = derivedKeyPerContact.get(contact);
+        keys[1] = deriveKey(contact,false);
+        derivedKeyPerContact.put(contact,keys);
         return split[0];
     }
-    public SecretKey createKey(String contact){
+    public void createKey(String contact){
         KeyGenerator keyGenAES = null;
         try {
             keyGenAES = KeyGenerator.getInstance("AES");
@@ -217,9 +254,27 @@ public class ClientMessager {
         }
         keyGenAES.init(256, new SecureRandom());
         SecretKey masterKey = keyGenAES.generateKey();
-        keyPerContact.put(contact,masterKey);
-        derivedKeyPerContact.put(contact,masterKey);
-        return masterKey;
+        String newTag = String.valueOf(random.nextInt());
+        int newIndex = random.nextInt(0,boardSize - 1);
+        indexPerContactSend.put(contact, newIndex);
+        tagPerContactSend.put(contact, newTag);
+        if (keyPerContact.containsKey(contact)) {
+            SecretKey[] secretKeys = keyPerContact.get(contact);
+            secretKeys[0] = masterKey;
+            keyPerContact.put(contact,secretKeys);
+            derivedKeyPerContact.put(contact,secretKeys);
+        }
+        else{
+            SecretKey[] secretKeys = new SecretKey[2];
+            secretKeys[0] = masterKey;
+            keyPerContact.put(contact,secretKeys);
+            derivedKeyPerContact.put(contact,secretKeys);
+        }
+//        SecretKey[] secretKeys = new SecretKey[2];
+//        secretKeys[0] = masterKey;
+
+
+        //return masterKey;
     }
     private String hashTag(String tag){
         byte[] bytes = tag.getBytes();
@@ -227,10 +282,20 @@ public class ClientMessager {
         return Base64.getEncoder().encodeToString(hashed);
     }
 
-    public SecretKey deriveKey(String contact){
+    public SecretKey deriveKey(String contact, boolean isSend){
         try {
-            SecretKey masterKey = keyPerContact.get(contact);
-            SecretKey salt = derivedKeyPerContact.get(contact);
+            SecretKey masterKey = null;
+            SecretKey salt = null;
+            if (isSend){
+                masterKey = keyPerContact.get(contact)[0];
+                salt = derivedKeyPerContact.get(contact)[0];
+            }
+            else{
+                masterKey = keyPerContact.get(contact)[1];
+                salt = derivedKeyPerContact.get(contact)[1];
+            }
+//            SecretKey masterKey = keyPerContact.get(contact);
+//            SecretKey salt = derivedKeyPerContact.get(contact);
             SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
             KeySpec spec = new PBEKeySpec(masterKey.toString().toCharArray(), salt.getEncoded(),65536,256);
             SecretKey tmp = factory.generateSecret(spec);
